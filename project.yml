@@ -22,6 +22,13 @@ targets:
     platform: iOS
     sources:
       - src
+      # Bundle the whole fetched runtime (JRE + bootstrap jar) verbatim into the
+      # app as a folder reference -> iSwiftMC.app/runtimes/... A folder reference
+      # (not a group) copies the entire tree, which is what we need for the JRE.
+      - path: runtimes
+        type: folder
+        buildPhase: resources
+        optional: true
     info:
       path: Info.plist
     settings:
@@ -38,12 +45,5 @@ targets:
       - sdk: UIKit.framework
       - sdk: Metal.framework
       - sdk: QuartzCore.framework
-      # libjvm and the GL stack are dlopen'd at runtime from the bundled runtime,
-      # so they are copied as resources rather than linked here.
-    # Copy the fetched runtime + GL libs into the app bundle.
-    copyFilesPhases:
-      - destination: resources
-        subpath: runtimes
-        files:
-          - path: runtimes
-            optional: true
+      # libjvm and the GL stack are dlopen'd at runtime from the bundled runtime
+      # (folder reference above), so they are not linked here.

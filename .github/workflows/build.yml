@@ -22,10 +22,10 @@ jobs:
           OPENJDK_IOS_URL: ${{ secrets.OPENJDK_IOS_URL }}
           GL4ES_IOS_URL:   ${{ secrets.GL4ES_IOS_URL }}
           ANGLE_IOS_URL:   ${{ secrets.ANGLE_IOS_URL }}
-        run: ./scripts/fetch-deps.sh
+        run: bash ./scripts/fetch-deps.sh
 
       - name: Build bootstrap jar (game-file installer)
-        run: ./bootstrap/build.sh runtimes   # lands as runtimes/iSwiftMC-bootstrap.jar, bundled with the runtime
+        run: bash ./bootstrap/build.sh runtimes   # lands as runtimes/iSwiftMC-bootstrap.jar, bundled with the runtime
 
       - name: Generate Xcode project
         run: xcodegen generate

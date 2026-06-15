@@ -7,9 +7,18 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14   # Apple silicon runner; iOS SDK only exists on macOS
+    runs-on: macos-latest   # newest image; iOS SDK only exists on macOS
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        # XcodeGen (latest) emits a project format that needs a recent Xcode.
+        # Pick the newest stable Xcode on the runner so xcodebuild can read it.
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          echo "Selecting ${LATEST:-/Applications/Xcode.app}"
+          sudo xcode-select -s "${LATEST:-/Applications/Xcode.app}"
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen

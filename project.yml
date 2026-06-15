@@ -27,10 +27,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.swiftmc.iswiftmc
-        # The bundled JVM lib + headers. Populated by scripts/fetch-deps.sh.
+        # JNI headers are vendored in src/include (a JRE ships no headers, only
+        # a JDK does), so <jni.h> resolves at compile time.
         HEADER_SEARCH_PATHS:
-          - $(SRCROOT)/runtimes/jre/include
-          - $(SRCROOT)/runtimes/jre/include/darwin
+          - $(SRCROOT)/src/include
         LIBRARY_SEARCH_PATHS:
           - $(SRCROOT)/runtimes/jre/lib
           - $(SRCROOT)/runtimes/jre/lib/server

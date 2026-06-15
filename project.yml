@@ -1,0 +1,49 @@
+# XcodeGen spec. Run `xcodegen generate` on macOS/CI to produce iSwiftMC.xcodeproj.
+# Authored on Windows; never built there.
+name: iSwiftMC
+options:
+  bundleIdPrefix: com.swiftmc
+  deploymentTarget:
+    iOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    ENABLE_BITCODE: NO
+    CLANG_ENABLE_OBJC_ARC: YES
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    # No-JIT build: we never request the dynamic-codesigning entitlement.
+    CODE_SIGN_STYLE: Manual
+
+targets:
+  iSwiftMC:
+    type: application
+    platform: iOS
+    sources:
+      - src
+    info:
+      path: Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.swiftmc.iswiftmc
+        # The bundled JVM lib + headers. Populated by scripts/fetch-deps.sh.
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/runtimes/jre/include
+          - $(SRCROOT)/runtimes/jre/include/darwin
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/runtimes/jre/lib
+          - $(SRCROOT)/runtimes/jre/lib/server
+    dependencies:
+      - sdk: UIKit.framework
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      # libjvm and the GL stack are dlopen'd at runtime from the bundled runtime,
+      # so they are copied as resources rather than linked here.
+    # Copy the fetched runtime + GL libs into the app bundle.
+    copyFilesPhases:
+      - destination: resources
+        subpath: runtimes
+        files:
+          - path: runtimes
+            optional: true

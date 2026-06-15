@@ -1,0 +1,9 @@
+# Normalize everything to LF in the repo so shell scripts run on the macOS/Linux
+# CI runner regardless of being authored on Windows. Without this, CRLF on a
+# shebang line (#!/usr/bin/env bash\r) breaks the build.
+* text=auto eol=lf
+
+# Be explicit for the things that MUST be LF to execute.
+*.sh   text eol=lf
+*.yml  text eol=lf
+Makefile text eol=lf

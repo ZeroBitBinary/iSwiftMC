@@ -1,0 +1,56 @@
+name: Build iSwiftMC (iOS, unsigned)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14   # Apple silicon runner; iOS SDK only exists on macOS
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Fetch native deps
+        env:
+          # ALL OPTIONAL. With none set, fetch-deps auto-extracts a working iOS
+          # arm64 Java 17 runtime from PojavLauncher's public IPA, and skips the
+          # GL libs (only needed once rendering is wired, ROADMAP phase 2).
+          OPENJDK_IOS_URL: ${{ secrets.OPENJDK_IOS_URL }}
+          GL4ES_IOS_URL:   ${{ secrets.GL4ES_IOS_URL }}
+          ANGLE_IOS_URL:   ${{ secrets.ANGLE_IOS_URL }}
+        run: ./scripts/fetch-deps.sh
+
+      - name: Build bootstrap jar (game-file installer)
+        run: ./bootstrap/build.sh runtimes   # lands as runtimes/iSwiftMC-bootstrap.jar, bundled with the runtime
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned .app
+        run: |
+          xcodebuild \
+            -project iSwiftMC.xcodeproj \
+            -scheme iSwiftMC \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned .ipa
+        run: |
+          cd build/Build/Products/Release-iphoneos
+          mkdir -p Payload
+          cp -R iSwiftMC.app Payload/
+          zip -r iSwiftMC-unsigned.ipa Payload
+          mv iSwiftMC-unsigned.ipa "$GITHUB_WORKSPACE/"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSwiftMC-unsigned-ipa
+          path: iSwiftMC-unsigned.ipa

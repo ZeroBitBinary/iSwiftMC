@@ -36,8 +36,10 @@ typedef jint (*CreateJavaVM_t)(JavaVM **pvm, void **penv, void *args);
     // on next launch even if the VM aborts the whole process.
     freopen([JVMLauncher jvmLogPath].fileSystemRepresentation, "w", stdout);
     freopen([JVMLauncher jvmLogPath].fileSystemRepresentation, "a", stderr);
+    // Unbuffered: a hard crash mid-init still leaves every line on disk.
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     fprintf(stderr, "[iSwiftMC] boot: jre=%s\n", jre.fileSystemRepresentation);
-    fflush(stderr);
 
     if (![[NSFileManager defaultManager] fileExistsAtPath:libjvm]) {
         if (error) *error = [NSError errorWithDomain:@"iSwiftMC" code:1 userInfo:@{

@@ -28,7 +28,8 @@
     _console.textColor = [UIColor greenColor];
     _console.font = [UIFont fontWithName:@"Menlo" size:11] ?: [UIFont systemFontOfSize:11];
     _console.editable = NO;
-    _console.text = @"iSwiftMC diagnostic build (v2)\n";
+    _console.text = [NSString stringWithFormat:@"iSwiftMC diagnostic build (v3 — JIT)\nJIT enabled right now: %@\n",
+                     [JVMLauncher isJITEnabled] ? @"YES ✅" : @"NO ❌ (enable in StikDebug first)"];
     [root.view addSubview:_console];
 
     // Boot is MANUAL now, so a crash trail stays readable on the next launch.
@@ -67,15 +68,22 @@
 }
 
 - (void)bootTapped {
+    // Check JIT up front so we give guidance instead of a silent SIGKILL.
+    if (![JVMLauncher isJITEnabled]) {
+        [self log:@"⚠️ JIT is NOT enabled for this app."];
+        [self log:@"   1) Open StikDebug  2) Enable JIT for iSwiftMC  3) return here, tap Boot."];
+        [self log:@"   (A JVM cannot run on iOS without JIT — this is expected.)"];
+        return;
+    }
     _bootBtn.enabled = NO;
     [_bootBtn setTitle:@"booting…" forState:UIControlStateNormal];
-    [self log:@"--- booting JVM now (-Xint, no JIT). If the app closes, reopen to read output. ---"];
+    [self log:@"✅ JIT detected. Booting JVM (with JIT)…"];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSError *err = nil;
         JVMLauncher *jvm = [[JVMLauncher alloc] init];
-        BOOL ok = [jvm bootInterpreterOnlyWithError:&err];
+        BOOL ok = [jvm bootJVMWithError:&err];
         if (ok) {
-            [self log:@"✅ JVM booted in interpreter-only mode. (no crash!)"];
+            [self log:@"✅ JVM booted with JIT. (no crash!)"];
         } else {
             [self log:[NSString stringWithFormat:@"❌ boot returned failure: %@",
                        err.localizedDescription]];

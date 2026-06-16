@@ -16,15 +16,33 @@ typedef jint (*CreateJavaVM_t)(JavaVM **pvm, void **penv, void *args);
     return [res stringByAppendingPathComponent:@"runtimes/jre"];
 }
 
+/// Writable app sandbox dir we point user.home/tmp/log at.
++ (NSString *)docsDir {
+    return [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
+                                                NSUserDomainMask, YES) firstObject];
+}
+
+/// Where the JVM's stdout/stderr from the *previous* run is captured.
++ (NSString *)jvmLogPath {
+    return [[self docsDir] stringByAppendingPathComponent:@"jvm-output.txt"];
+}
+
 - (BOOL)bootInterpreterOnlyWithError:(NSError **)error {
-    NSString *jre = [self bundledJREPath];
+    NSString *jre  = [self bundledJREPath];
+    NSString *docs = [JVMLauncher docsDir];
     NSString *libjvm = [jre stringByAppendingPathComponent:@"lib/server/libjvm.dylib"];
+
+    // Capture everything the JVM prints (incl. fatal errors) so we can show it
+    // on next launch even if the VM aborts the whole process.
+    freopen([JVMLauncher jvmLogPath].fileSystemRepresentation, "w", stdout);
+    freopen([JVMLauncher jvmLogPath].fileSystemRepresentation, "a", stderr);
+    fprintf(stderr, "[iSwiftMC] boot: jre=%s\n", jre.fileSystemRepresentation);
+    fflush(stderr);
 
     if (![[NSFileManager defaultManager] fileExistsAtPath:libjvm]) {
         if (error) *error = [NSError errorWithDomain:@"iSwiftMC" code:1 userInfo:@{
             NSLocalizedDescriptionKey:
-                [NSString stringWithFormat:@"libjvm not found at %@. Did "
-                 @"scripts/fetch-deps.sh run before the build?", libjvm]}];
+                [NSString stringWithFormat:@"libjvm not found at %@", libjvm]}];
         return NO;
     }
 
@@ -43,32 +61,48 @@ typedef jint (*CreateJavaVM_t)(JavaVM **pvm, void **penv, void *args);
         return NO;
     }
 
-    // --- The crux: force interpreter-only execution. No JIT. ---
-    // -Xint disables C1/C2, so the JVM never needs writable-executable memory.
+    NSString *libDir = [jre stringByAppendingPathComponent:@"lib"];
+    NSString *hsErr  = [docs stringByAppendingPathComponent:@"hs_err.log"];
+
+    // --- Interpreter-only (no JIT) + the iOS-survival flags PojavLauncher needs ---
+    //  -Xint         : pure interpreter (no writable-executable memory needed)
+    //  -Xrs          : don't install signal handlers (they conflict on iOS -> crash)
+    //  ErrorFile     : write fatal-error log somewhere we can read it
+    //  user.home/tmp : iOS sandbox is read-only except Documents/tmp
     NSMutableArray<NSString *> *opts = [@[
         @"-Xint",
+        @"-Xrs",
         [NSString stringWithFormat:@"-Djava.home=%@", jre],
-        // Conservative heap; iOS is memory-constrained and the OS will jetsam us.
-        @"-Xmx1024M",
+        [NSString stringWithFormat:@"-Djava.library.path=%@", libDir],
+        [NSString stringWithFormat:@"-Duser.home=%@", docs],
+        [NSString stringWithFormat:@"-Duser.dir=%@", docs],
+        [NSString stringWithFormat:@"-Djava.io.tmpdir=%@", NSTemporaryDirectory()],
         @"-XX:+UnlockExperimentalVMOptions",
-        @"-Djava.library.path=" // filled in phase 3 (gl4es/ANGLE/LWJGL natives)
+        @"-XX:-UsePerfData",
+        [NSString stringWithFormat:@"-XX:ErrorFile=%@", hsErr],
+        @"-Xmx512M",
     ] mutableCopy];
 
     JavaVMOption *cOpts = calloc(opts.count, sizeof(JavaVMOption));
     for (NSUInteger i = 0; i < opts.count; i++) {
         cOpts[i].optionString = strdup(opts[i].UTF8String);
+        fprintf(stderr, "[iSwiftMC] opt: %s\n", cOpts[i].optionString);
     }
+    fflush(stderr);
 
     JavaVMInitArgs vmArgs = {0};
     vmArgs.version = JNI_VERSION_1_8;
     vmArgs.nOptions = (jint)opts.count;
     vmArgs.options = cOpts;
-    vmArgs.ignoreUnrecognized = JNI_FALSE;
+    vmArgs.ignoreUnrecognized = JNI_TRUE;  // tolerate unknown flags rather than abort
 
     jint rc = createVM(&_vm, (void **)&_env, &vmArgs);
 
     for (NSUInteger i = 0; i < opts.count; i++) free(cOpts[i].optionString);
     free(cOpts);
+
+    fprintf(stderr, "[iSwiftMC] JNI_CreateJavaVM rc=%d\n", rc);
+    fflush(stderr);
 
     if (rc != JNI_OK) {
         if (error) *error = [NSError errorWithDomain:@"iSwiftMC" code:4 userInfo:@{
@@ -80,9 +114,6 @@ typedef jint (*CreateJavaVM_t)(JavaVM **pvm, void **penv, void *args);
 }
 
 - (BOOL)launchMainClass:(NSString *)mainClass args:(NSArray<NSString *> *)args {
-    // TODO(phase 3): FindClass(mainClass) → GetStaticMethodID "main"
-    // ([Ljava/lang/String;)V → build a String[] from args → CallStaticVoidMethod.
-    // Must run on a thread attached via AttachCurrentThread.
     NSLog(@"[iSwiftMC] launchMainClass not yet implemented: %@", mainClass);
     return NO;
 }

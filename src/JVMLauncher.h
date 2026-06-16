@@ -4,6 +4,11 @@
 /// i.e. no JIT. This is the only mode usable on a normally-sideloaded iOS app.
 @interface JVMLauncher : NSObject
 
+/// Writable Documents dir (user.home/working dir for the JVM).
++ (NSString *)docsDir;
+/// File the JVM's stdout/stderr is redirected to (survives a VM abort).
++ (NSString *)jvmLogPath;
+
 /// Locates the bundled runtime in the app's resources, dlopen's libjvm, and
 /// calls JNI_CreateJavaVM with -Xint plus the standard module/classpath args.
 /// Returns NO and populates *error on failure.
